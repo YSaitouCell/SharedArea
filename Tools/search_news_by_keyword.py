@@ -4,7 +4,7 @@ from newsapi import NewsApiClient
 import re
 from urllib.parse import urlparse
 
-NEWS_API_KEY = '313eea86dab94326a97150bf235e2fd0'
+NEWS_API_KEY = ''
 keywords = ['シャンパン', 'シャンパーニュ', 'champagne']
 start_date = '2024-07-01'
 end_date = '2024-07-15'
