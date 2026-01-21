@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>食品リサイクル業者マップ</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* 地図の全画面設定 */
+        body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+        #map { height: 100vh; width: 100%; z-index: 1; }
+
+        /* 検索・フィルタパネルのデザイン */
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: 95%;
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 10px;
+            max-height: 30vh; /* スマホで地図を隠しすぎないように */
+            overflow-y: auto;
+        }
+
+        /* カスタムマーカー（CSSでピンを描画） */
+        .custom-pin {
+            background-color: #fff;
+            border-radius: 50%;
+            border: 2px solid #333;
+            text-align: center;
+            color: #333;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        /* ピンの色バリエーション */
+        .pin-fertilizer { background-color: #28a745; color: white; border-color: #1e7e34; } /* 緑 */
+        .pin-feed { background-color: #fd7e14; color: white; border-color: #e8590c; }       /* オレンジ */
+        .pin-other { background-color: #0d6efd; color: white; border-color: #0a58ca; }       /* 青 */
+        
+        /* ポップアップ内のボタン */
+        .btn-google-map {
+            width: 100%;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="control-panel">
+        <input type="text" id="searchInput" class="form-control mb-2" placeholder="業者名、住所、品目で検索...">
+        
+        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-center">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="filterFertilizer" checked>
+                <label class="form-check-label badge bg-success" for="filterFertilizer"><i class="fa-solid fa-leaf"></i> 肥料化</label>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="filterFeed" checked>
+                <label class="form-check-label badge bg-warning text-dark" for="filterFeed"><i class="fa-solid fa-piggy-bank"></i> 飼料化</label>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="filterOther" checked>
+                <label class="form-check-label badge bg-primary" for="filterOther">その他</label>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <script>
+        // 1. 地図の初期設定
+        const map = L.map('map').setView([36.2048, 138.2529], 5); // 日本全体
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let allMarkers = []; // フィルタリング用に全マーカーを保持
+
+        // 2. ピンの見た目を作る関数
+        function createCustomIcon(type) {
+            let className = 'custom-pin ';
+            let iconHtml = '';
+
+            if (type === 'fertilizer') {
+                className += 'pin-fertilizer';
+                iconHtml = '<i class="fa-solid fa-leaf"></i>'; // 葉っぱアイコン
+            } else if (type === 'feed') {
+                className += 'pin-feed';
+                iconHtml = '<i class="fa-solid fa-piggy-bank"></i>'; // 豚アイコン
+            } else {
+                className += 'pin-other';
+                iconHtml = '<i class="fa-solid fa-recycle"></i>'; // リサイクルアイコン
+            }
+
+            return L.divIcon({
+                className: 'custom-div-icon', // Leaflet標準のクラスを上書きしないためのダミー
+                html: `<div class="${className}" style="width: 30px; height: 30px;">${iconHtml}</div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+                popupAnchor: [0, -15]
+            });
+        }
+
+        // 3. カテゴリ判定ロジック
+        function getCategory(tags) {
+            if (!tags) return 'other';
+            if (tags.includes('飼料')) return 'feed';
+            if (tags.includes('肥料')) return 'fertilizer';
+            return 'other';
+        }
+
+        // 4. CSV読み込みと表示
+        Papa.parse("merged_facilities_with_coords.csv", {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                const data = results.data;
+
+                data.forEach(row => {
+                    if (row.latitude && row.longitude) {
+                        const lat = parseFloat(row.latitude);
+                        const lng = parseFloat(row.longitude);
+                        const rawTags = row.process_tags || '';
+                        
+                        // カテゴリ決定
+                        const category = getCategory(rawTags);
+                        
+                        // マーカー作成
+                        const marker = L.marker([lat, lng], {
+                            icon: createCustomIcon(category)
+                        });
+
+                        // ポップアップ内容の作成
+                        // タグの文字列整形（['a','b']みたいな形式をきれいに）
+                        const cleanTags = rawTags.replace(/[\[\]']/g, "").replace(/,/g, ", ");
+                        
+                        // Google Map リンク作成
+                        const googleMapUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+                        const popupContent = `
+                            <div style="font-size:14px;">
+                                <h6 class="fw-bold mb-1">${row.facility_name}</h6>
+                                <p class="mb-1 text-muted" style="font-size:12px;">${row.address}</p>
+                                <span class="badge bg-secondary">${cleanTags || '種別不明'}</span>
+                                <hr class="my-2">
+                                <div style="font-size:12px;">
+                                    <strong>受入:</strong> ${row.accepted_materials || '-'}<br>
+                                    <strong>能力:</strong> ${row.daily_capacity || '-'} t/日
+                                </div>
+                                <a href="${googleMapUrl}" target="_blank" class="btn btn-primary btn-sm btn-google-map text-white">
+                                    <i class="fa-solid fa-location-arrow"></i> Googleマップでここへ行く
+                                </a>
+                            </div>
+                        `;
+
+                        marker.bindPopup(popupContent);
+                        
+                        // フィルタリング用にデータをマーカーに紐付け
+                        marker.category = category; 
+                        marker.searchData = `${row.facility_name} ${row.address} ${cleanTags} ${row.accepted_materials}`.toLowerCase();
+                        
+                        allMarkers.push(marker);
+                        marker.addTo(map);
+                    }
+                });
+                
+                // 初回読み込み時のエリア自動調整
+                if(allMarkers.length > 0){
+                   const group = L.featureGroup(allMarkers);
+                   map.fitBounds(group.getBounds());
+                }
+            }
+        });
+
+        // 5. フィルタリング＆検索機能
+        function filterMarkers() {
+            const keyword = document.getElementById('searchInput').value.toLowerCase();
+            const showFertilizer = document.getElementById('filterFertilizer').checked;
+            const showFeed = document.getElementById('filterFeed').checked;
+            const showOther = document.getElementById('filterOther').checked;
+
+            allMarkers.forEach(marker => {
+                // 1. カテゴリフィルタのチェック
+                let categoryMatch = false;
+                if (marker.category === 'fertilizer' && showFertilizer) categoryMatch = true;
+                if (marker.category === 'feed' && showFeed) categoryMatch = true;
+                if (marker.category === 'other' && showOther) categoryMatch = true;
+
+                // 2. キーワード検索のチェック
+                const keywordMatch = marker.searchData.includes(keyword);
+
+                // 両方OKなら表示、ダメなら非表示
+                if (categoryMatch && keywordMatch) {
+                    if (!map.hasLayer(marker)) map.addLayer(marker);
+                } else {
+                    if (map.hasLayer(marker)) map.removeLayer(marker);
+                }
+            });
+        }
+
+        // イベントリスナー設定
+        document.getElementById('searchInput').addEventListener('keyup', filterMarkers);
+        document.getElementById('filterFertilizer').addEventListener('change', filterMarkers);
+        document.getElementById('filterFeed').addEventListener('change', filterMarkers);
+        document.getElementById('filterOther').addEventListener('change', filterMarkers);
+
+    </script>
+</body>
+</html>
