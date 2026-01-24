@@ -10,11 +10,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        /* 地図の全画面設定 */
         body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; }
         #map { height: 100vh; width: 100%; z-index: 1; }
 
-        /* 検索・フィルタパネルのデザイン */
         .control-panel {
             position: absolute;
             top: 10px;
@@ -22,58 +20,78 @@
             transform: translateX(-50%);
             z-index: 1000;
             width: 95%;
-            max-width: 500px;
+            max-width: 600px;
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            padding: 10px;
-            max-height: 30vh; /* スマホで地図を隠しすぎないように */
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            padding: 15px;
+            max-height: 40vh;
             overflow-y: auto;
         }
 
-        /* カスタムマーカー（CSSでピンを描画） */
         .custom-pin {
             background-color: #fff;
             border-radius: 50%;
             border: 2px solid #333;
             text-align: center;
-            color: #333;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 14px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
-        /* ピンの色バリエーション */
-        .pin-fertilizer { background-color: #28a745; color: white; border-color: #1e7e34; } /* 緑 */
-        .pin-feed { background-color: #fd7e14; color: white; border-color: #e8590c; }       /* オレンジ */
-        .pin-other { background-color: #0d6efd; color: white; border-color: #0a58ca; }       /* 青 */
+        /* カテゴリ別カラー */
+        .pin-fertilizer { background-color: #28a745; color: white; }
+        .pin-feed { background-color: #fd7e14; color: white; }
+        .pin-methane { background-color: #6f42c1; color: white; }
+        .pin-other { background-color: #0d6efd; color: white; }
         
-        /* ポップアップ内のボタン */
-        .btn-google-map {
-            width: 100%;
-            margin-top: 10px;
-            font-size: 0.9rem;
-        }
+        .btn-google-map { width: 100%; margin-top: 10px; }
+        .info-link { text-decoration: none; color: #0d6efd; }
+        .info-link:hover { text-decoration: underline; }
+        
+        /* フィルタセクションの区切り */
+        .filter-section { border-top: 1px solid #dee2e6; padding-top: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="control-panel">
-        <input type="text" id="searchInput" class="form-control mb-2" placeholder="業者名、住所、品目で検索...">
+        <input type="text" id="searchInput" class="form-control mb-3" placeholder="業者名、住所、品目で検索...">
         
-        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-center">
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="filterFertilizer" checked>
-                <label class="form-check-label badge bg-success" for="filterFertilizer"><i class="fa-solid fa-leaf"></i> 肥料化</label>
+        <div class="row g-2">
+            <div class="col-12 d-flex flex-wrap gap-2 mb-2">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="filterFertilizer" checked>
+                    <label class="form-check-label badge bg-success" for="filterFertilizer">肥料化</label>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="filterFeed" checked>
+                    <label class="form-check-label badge bg-warning text-dark" for="filterFeed">飼料化</label>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="filterMethane" checked>
+                    <label class="form-check-label badge bg-purple" style="background-color:#6f42c1; color:white;" for="filterMethane">メタン化</label>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="filterOther" checked>
+                    <label class="form-check-label badge bg-primary" for="filterOther">その他</label>
+                </div>
             </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="filterFeed" checked>
-                <label class="form-check-label badge bg-warning text-dark" for="filterFeed"><i class="fa-solid fa-piggy-bank"></i> 飼料化</label>
-            </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="filterOther" checked>
-                <label class="form-check-label badge bg-primary" for="filterOther">その他</label>
+
+            <div class="col-12 filter-section d-flex flex-wrap gap-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="filterOnlyCertified">
+                    <label class="form-check-label fw-bold" for="filterOnlyCertified" style="color:#d63384;">
+                        <i class="fa-solid fa-certificate"></i> 認定業者のみ
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="filterOnlyRegistered">
+                    <label class="form-check-label fw-bold text-dark" for="filterOnlyRegistered">
+                        <i class="fa-solid fa-id-card"></i> 登録業者のみ
+                    </label>
+                </div>
             </div>
         </div>
     </div>
@@ -85,130 +103,104 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <script>
-        // 1. 地図の初期設定
-        const map = L.map('map').setView([36.2048, 138.2529], 5); // 日本全体
+        const map = L.map('map').setView([36.2048, 138.2529], 5);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        let allMarkers = []; // フィルタリング用に全マーカーを保持
+        let allMarkers = [];
 
-        // 2. ピンの見た目を作る関数
         function createCustomIcon(type) {
             let className = 'custom-pin ';
             let iconHtml = '';
-
-            if (type === 'fertilizer') {
-                className += 'pin-fertilizer';
-                iconHtml = '<i class="fa-solid fa-leaf"></i>'; // 葉っぱアイコン
-            } else if (type === 'feed') {
-                className += 'pin-feed';
-                iconHtml = '<i class="fa-solid fa-piggy-bank"></i>'; // 豚アイコン
-            } else {
-                className += 'pin-other';
-                iconHtml = '<i class="fa-solid fa-recycle"></i>'; // リサイクルアイコン
-            }
+            if (type === 'fertilizer') { className += 'pin-fertilizer'; iconHtml = '<i class="fa-solid fa-leaf"></i>'; }
+            else if (type === 'feed') { className += 'pin-feed'; iconHtml = '<i class="fa-solid fa-piggy-bank"></i>'; }
+            else if (type === 'methane') { className += 'pin-methane'; iconHtml = '<i class="fa-solid fa-bolt"></i>'; }
+            else { className += 'pin-other'; iconHtml = '<i class="fa-solid fa-recycle"></i>'; }
 
             return L.divIcon({
-                className: 'custom-div-icon', // Leaflet標準のクラスを上書きしないためのダミー
-                html: `<div class="${className}" style="width: 30px; height: 30px;">${iconHtml}</div>`,
-                iconSize: [30, 30],
-                iconAnchor: [15, 15],
-                popupAnchor: [0, -15]
+                className: 'custom-div-icon',
+                html: `<div class="${className}" style="width: 32px; height: 32px;">${iconHtml}</div>`,
+                iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -16]
             });
         }
 
-        // 3. カテゴリ判定ロジック
-        function getCategory(tags) {
-            if (!tags) return 'other';
-            if (tags.includes('飼料')) return 'feed';
-            if (tags.includes('肥料')) return 'fertilizer';
-            return 'other';
-        }
-
-        // 4. CSV読み込みと表示
-        Papa.parse("merged_facilities_with_coords.csv", {
-            download: true,
-            header: true,
-            skipEmptyLines: true,
+        Papa.parse("merged_facilities_with_coords.csv?v=" + new Date().getTime(), {
+            download: true, header: true, skipEmptyLines: true,
             complete: function(results) {
-                const data = results.data;
-
-                data.forEach(row => {
+                results.data.forEach(row => {
                     if (row.latitude && row.longitude) {
-                        const lat = parseFloat(row.latitude);
-                        const lng = parseFloat(row.longitude);
-                        const rawTags = row.process_tags || '';
-                        
-                        // カテゴリ決定
-                        const category = getCategory(rawTags);
-                        
-                        // マーカー作成
-                        const marker = L.marker([lat, lng], {
+                        const tags = row.process_tags || '';
+                        let category = 'other';
+                        if (row.is_methane === 'True' || tags.includes('メタン')) category = 'methane';
+                        else if (tags.includes('飼料')) category = 'feed';
+                        else if (tags.includes('肥料')) category = 'fertilizer';
+
+                        const marker = L.marker([parseFloat(row.latitude), parseFloat(row.longitude)], {
                             icon: createCustomIcon(category)
                         });
 
-                        // ポップアップ内容の作成
-                        // タグの文字列整形（['a','b']みたいな形式をきれいに）
-                        const cleanTags = rawTags.replace(/[\[\]']/g, "").replace(/,/g, ", ");
-                        
-                        // Google Map リンク作成
-                        const googleMapUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+                        // 認定・登録バッジ
+                        let badges = '';
+                        if (row.is_certified === 'True') badges += '<span class="badge bg-danger me-1"><i class="fa-solid fa-certificate"></i> 認定</span>';
+                        if (row.is_registered === 'True') badges += '<span class="badge bg-dark"><i class="fa-solid fa-id-card"></i> 登録</span>';
+
+                        // 電話番号・URLの処理
+                        const phoneLink = row.phone ? `<p class="mb-1"><i class="fa-solid fa-phone"></i> <a href="tel:${row.phone}" class="info-link">${row.phone}</a></p>` : '';
+                        const urlLink = row.url ? `<p class="mb-1"><i class="fa-solid fa-globe"></i> <a href="${row.url}" target="_blank" class="info-link">公式ウェブサイト</a></p>` : '';
 
                         const popupContent = `
-                            <div style="font-size:14px;">
+                            <div style="min-width:200px;">
+                                <div class="mb-2">${badges}</div>
                                 <h6 class="fw-bold mb-1">${row.facility_name}</h6>
-                                <p class="mb-1 text-muted" style="font-size:12px;">${row.address}</p>
-                                <span class="badge bg-secondary">${cleanTags || '種別不明'}</span>
-                                <hr class="my-2">
-                                <div style="font-size:12px;">
-                                    <strong>受入:</strong> ${row.accepted_materials || '-'}<br>
-                                    <strong>能力:</strong> ${row.daily_capacity || '-'} t/日
+                                <p class="text-muted small mb-2">${row.address}</p>
+                                <div class="border-top pt-2 mt-2" style="font-size:13px;">
+                                    ${phoneLink}
+                                    ${urlLink}
+                                    <p class="mb-0 mt-2 text-secondary"><strong>能力:</strong> ${row.daily_capacity || '-'} t/日</p>
                                 </div>
-                                <a href="${googleMapUrl}" target="_blank" class="btn btn-primary btn-sm btn-google-map text-white">
-                                    <i class="fa-solid fa-location-arrow"></i> Googleマップでここへ行く
+                                <a href="https://www.google.com/maps/dir/?api=1&destination=${row.latitude},${row.longitude}" target="_blank" class="btn btn-primary btn-sm btn-google-map text-white">
+                                    <i class="fa-solid fa-location-arrow"></i> 経路案内
                                 </a>
                             </div>
                         `;
 
                         marker.bindPopup(popupContent);
-                        
-                        // フィルタリング用にデータをマーカーに紐付け
-                        marker.category = category; 
-                        marker.searchData = `${row.facility_name} ${row.address} ${cleanTags} ${row.accepted_materials}`.toLowerCase();
+                        // マウスオーバーでポップアップを表示
+                        marker.on('mouseover', function (e) { this.openPopup(); });
+
+                        marker.category = category;
+                        marker.isCertified = row.is_certified === 'True';
+                        marker.isRegistered = row.is_registered === 'True';
+                        marker.searchData = `${row.facility_name} ${row.address} ${tags}`.toLowerCase();
                         
                         allMarkers.push(marker);
                         marker.addTo(map);
                     }
                 });
-                
-                // 初回読み込み時のエリア自動調整
-                if(allMarkers.length > 0){
-                   const group = L.featureGroup(allMarkers);
-                   map.fitBounds(group.getBounds());
-                }
             }
         });
 
-        // 5. フィルタリング＆検索機能
         function filterMarkers() {
             const keyword = document.getElementById('searchInput').value.toLowerCase();
-            const showFertilizer = document.getElementById('filterFertilizer').checked;
+            const showFert = document.getElementById('filterFertilizer').checked;
             const showFeed = document.getElementById('filterFeed').checked;
+            const showMeth = document.getElementById('filterMethane').checked;
             const showOther = document.getElementById('filterOther').checked;
+            const onlyCert = document.getElementById('filterOnlyCertified').checked;
+            const onlyReg = document.getElementById('filterOnlyRegistered').checked;
 
             allMarkers.forEach(marker => {
-                // 1. カテゴリフィルタのチェック
-                let categoryMatch = false;
-                if (marker.category === 'fertilizer' && showFertilizer) categoryMatch = true;
-                if (marker.category === 'feed' && showFeed) categoryMatch = true;
-                if (marker.category === 'other' && showOther) categoryMatch = true;
+                const catMatch = (marker.category === 'fertilizer' && showFert) ||
+                                 (marker.category === 'feed' && showFeed) ||
+                                 (marker.category === 'methane' && showMeth) ||
+                                 (marker.category === 'other' && showOther);
+                
+                const certMatch = !onlyCert || marker.isCertified;
+                const regMatch = !onlyReg || marker.isRegistered;
+                const keyMatch = marker.searchData.includes(keyword);
 
-                // 2. キーワード検索のチェック
-                const keywordMatch = marker.searchData.includes(keyword);
-
-                // 両方OKなら表示、ダメなら非表示
-                if (categoryMatch && keywordMatch) {
+                if (catMatch && certMatch && regMatch && keyMatch) {
                     if (!map.hasLayer(marker)) map.addLayer(marker);
                 } else {
                     if (map.hasLayer(marker)) map.removeLayer(marker);
@@ -216,12 +208,9 @@
             });
         }
 
-        // イベントリスナー設定
-        document.getElementById('searchInput').addEventListener('keyup', filterMarkers);
-        document.getElementById('filterFertilizer').addEventListener('change', filterMarkers);
-        document.getElementById('filterFeed').addEventListener('change', filterMarkers);
-        document.getElementById('filterOther').addEventListener('change', filterMarkers);
-
+        ['searchInput', 'filterFertilizer', 'filterFeed', 'filterMethane', 'filterOther', 'filterOnlyCertified', 'filterOnlyRegistered'].forEach(id => {
+            document.getElementById(id).addEventListener(id === 'searchInput' ? 'keyup' : 'change', filterMarkers);
+        });
     </script>
 </body>
 </html>
